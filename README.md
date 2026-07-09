@@ -62,12 +62,13 @@ ros2 launch insta360_camera camera.launch.py mode:=1280
 ros2 launch insta360_camera camera.launch.py pixel_format:=mono8
 ```
 
-Topics sit under the node's name (its identity), so the default node
-`insta360_camera` publishes them at `/insta360_camera/image_raw`:
-- `image_raw` — decoded once here for all live consumers (rviz2, rqt_image_view,
-  image_proc, your policy). `bgr8` by default, or `mono8` via the `pixel_format`
-  param (the free Y plane, skipping the YUV->BGR convert). QoS RELIABLE keep_last(1).
-- `image_raw/ffmpeg` — `FFMPEGPacket` h264: the CAMERA'S OWN bitstream,
+Each camera in the `cameras` param publishes under its own name; the default is
+one camera named after the node, so `/insta360_camera/image_raw`:
+- `<name>/image_raw` — decoded once here for all live consumers (rviz2,
+  rqt_image_view, image_proc, your policy). `bgr8` by default, or `mono8` via the
+  `pixel_format` param (the free Y plane, skipping the YUV->BGR convert).
+  QoS RELIABLE keep_last(1).
+- `<name>/image_raw/ffmpeg` — `FFMPEGPacket` h264: the CAMERA'S OWN bitstream,
   pass-through (no decode->re-encode round trip, no quality loss, ~0.25 MB/s).
   Named per `ffmpeg_image_transport`, so an `image_transport` subscriber on
   `image_raw` with the `ffmpeg` transport decodes it directly; or rosbag it raw.
@@ -88,10 +89,31 @@ ros2 component load /ComponentManager <your_pkg> <YourConsumer> -e use_intra_pro
 (Intra-process comms must be enabled on BOTH components or the zero-copy
 path silently degrades to normal DDS.)
 
-Parameters: `mode` (see Modes), `pixel_format` (bgr8|mono8), `sensor`
-(rear|front|all), `bitrate`, `publish_h264`, `frame_id`. Invalid mode or sensor values fail fast at startup
-rather than being forwarded to the camera (arbitrary resolution ids can wedge
-it). Image conversions are skipped while a topic has no subscribers.
+Parameters: `cameras` (list of `"name"` or `"name:serial"`; default one camera
+named after the node), `mode` (see Modes), `pixel_format` (bgr8|mono8), `sensor`
+(rear|front|all), `bitrate`, `publish_h264`. Invalid mode or sensor values fail
+fast at startup rather than being forwarded to the camera (arbitrary resolution
+ids can wedge it). Image conversions are skipped while a topic has no subscribers.
+
+## Multiple cameras
+
+**One node drives every camera.** The SDK binds a fixed local port per process,
+so two camera processes can't coexist (the second dies with `bind: Address
+already in use`) — the cameras must share one process. List them in the `cameras`
+param as `"name:serial"`; each streams on its own SDK thread and publishes under
+`/<name>/image_raw` with `header.frame_id` = its name. Find the serials with
+(prepend `sudo` if it prints nothing):
+
+```bash
+lsusb -v -d 2e1a: 2>/dev/null | awk '/iSerial/{print $3}'
+```
+
+```bash
+ros2 run insta360_camera camera_node --ros-args \
+  -p cameras:="[left_camera:<left_serial>, right_camera:<right_serial>]"
+# /left_camera/image_raw  (frame_id "left_camera")
+# /right_camera/image_raw (frame_id "right_camera")
+```
 
 ## Reusing the reader without ROS
 

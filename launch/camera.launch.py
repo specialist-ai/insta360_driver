@@ -8,7 +8,9 @@ from launch_ros.parameter_descriptions import ParameterValue
 def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument("name", default_value="insta360_camera",
-                              description="camera identity = node name, e.g. left_camera -> /left_camera/image_raw"),
+                              description="camera identity: topic prefix /<name>/image_raw and frame_id"),
+        DeclareLaunchArgument("serial", default_value="",
+                              description="device serial to open; empty = first found"),
         DeclareLaunchArgument("mode", default_value="720",
                               description="720 | 1280 | 1920 (fisheye size)"),
         DeclareLaunchArgument("pixel_format", default_value="bgr8",
@@ -16,9 +18,10 @@ def generate_launch_description():
         Node(
             package="insta360_camera",
             executable="camera_node",
-            name=LaunchConfiguration("name"),
+            name="insta360_camera",
             output="screen",
             parameters=[{
+                "cameras": [[LaunchConfiguration("name"), ":", LaunchConfiguration("serial")]],
                 # ParameterValue(value_type=str): launch would otherwise
                 # coerce "720" to int and the string-typed parameter throws
                 "mode": ParameterValue(LaunchConfiguration("mode"),

@@ -161,10 +161,20 @@ bool Reader::start(const ReaderOptions& opts, FrameCallback frameCb, PacketCallb
             "dangling session from a killed client?)\n");
     return false;
   }
-  impl_->serial = list[0].serial_number;
-  impl_->firmware = list[0].fw_version;
+  // Select the requested serial (for multi-camera rigs), or the first device.
+  size_t idx = 0;
+  if (!opts.serial.empty()) {
+    while (idx < list.size() && list[idx].serial_number != opts.serial) idx++;
+    if (idx == list.size()) {
+      fprintf(stderr, "[insta360] serial %s not found among %zu device(s)\n", opts.serial.c_str(), list.size());
+      discovery.FreeDeviceDescriptors(list);
+      return false;
+    }
+  }
+  impl_->serial = list[idx].serial_number;
+  impl_->firmware = list[idx].fw_version;
 
-  impl_->cam = std::make_shared<ins_camera::Camera>(list[0].info);
+  impl_->cam = std::make_shared<ins_camera::Camera>(list[idx].info);
   impl_->cam->SetTimeout(5000);
   const bool opened = impl_->cam->Open();
   discovery.FreeDeviceDescriptors(list);

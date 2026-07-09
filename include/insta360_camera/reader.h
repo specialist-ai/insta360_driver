@@ -45,6 +45,7 @@ struct ReaderOptions {
   int sensor = 2;  // 1=front 2=rear 3=both
   int bitrate = 2 * 1024 * 1024;
   int startRetries = 3;
+  std::string serial;  // pick this device; empty = first discovered
   // Polled during start()'s retry waits so a launch shutdown can abort the
   // (otherwise ~30s) retry sequence and still close the camera cleanly.
   std::function<bool()> keepGoing;
