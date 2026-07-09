@@ -48,4 +48,20 @@ install(FILES ${SDK_DIR}/lib/libCameraSDK.so DESTINATION lib)
 install(DIRECTORY include/ DESTINATION include)
 install(DIRECTORY launch DESTINATION share/${PROJECT_NAME})
 
+# Opt in with: colcon build --cmake-args -DINSTA360_BUILD_BENCHMARKS=ON
+option(INSTA360_BUILD_BENCHMARKS
+  "Build latency/benchmark tools (dev only, not for production)" OFF)
+if(INSTA360_BUILD_BENCHMARKS)
+  add_library(latency_probe_component SHARED test/latency_probe.cpp)
+  target_link_libraries(latency_probe_component
+    rclcpp::rclcpp rclcpp_components::component ${sensor_msgs_TARGETS})
+  rclcpp_components_register_node(latency_probe_component
+    PLUGIN "insta360_camera::LatencyProbe"
+    EXECUTABLE latency_probe)
+
+  install(TARGETS latency_probe_component
+    RUNTIME DESTINATION lib/${PROJECT_NAME}
+    LIBRARY DESTINATION lib)
+endif()
+
 ament_package()
