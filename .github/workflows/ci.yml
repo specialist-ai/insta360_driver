@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+# Default build is driver-only (benchmarks are opt-in), so CI needs no camera.
+jobs:
+  pre-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+      - uses: pre-commit/action@v3.0.1
+
+  industrial_ci:
+    name: ${{ matrix.env.ROS_DISTRO }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        env:
+          - {ROS_DISTRO: jazzy,   ROS_REPO: main}
+          - {ROS_DISTRO: lyrical, ROS_REPO: main}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ros-industrial/industrial_ci@master
+        env: ${{ matrix.env }}

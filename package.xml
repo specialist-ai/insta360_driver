@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>insta360_camera</name>
+  <version>0.1.0</version>
+  <description>
+    Low-latency Insta360 X3 rear-lens fisheye reader and ROS 2 publisher,
+    including the SPS reorder-latency patch.
+  </description>
+  <maintainer email="qiayuanl@berkeley.edu">qiayuanl</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <depend>rclcpp</depend>
+  <depend>rclcpp_components</depend>
+  <depend>sensor_msgs</depend>
+  <depend>ffmpeg_image_transport_msgs</depend>
+  <depend>libavdevice-dev</depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
