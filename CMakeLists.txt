@@ -52,6 +52,8 @@ install(DIRECTORY launch DESTINATION share/${PROJECT_NAME})
 option(INSTA360_BUILD_BENCHMARKS
   "Build latency/benchmark tools (dev only, not for production)" OFF)
 if(INSTA360_BUILD_BENCHMARKS)
+  find_package(OpenCV REQUIRED)  # benchmark-only: aruco detector
+
   add_library(latency_probe_component SHARED test/latency_probe.cpp)
   target_link_libraries(latency_probe_component
     rclcpp::rclcpp rclcpp_components::component ${sensor_msgs_TARGETS})
@@ -59,7 +61,15 @@ if(INSTA360_BUILD_BENCHMARKS)
     PLUGIN "insta360_camera::LatencyProbe"
     EXECUTABLE latency_probe)
 
-  install(TARGETS latency_probe_component
+  add_library(aruco_latency_component SHARED test/aruco_latency_test.cpp)
+  target_link_libraries(aruco_latency_component
+    ${OpenCV_LIBS}
+    rclcpp::rclcpp rclcpp_components::component ${sensor_msgs_TARGETS})
+  rclcpp_components_register_node(aruco_latency_component
+    PLUGIN "insta360_camera::ArucoLatencyTest"
+    EXECUTABLE aruco_latency_test)
+
+  install(TARGETS latency_probe_component aruco_latency_component
     RUNTIME DESTINATION lib/${PROJECT_NAME}
     LIBRARY DESTINATION lib)
 endif()

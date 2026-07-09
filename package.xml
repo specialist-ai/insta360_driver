@@ -19,6 +19,9 @@
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
 
+  <!-- benchmark tools only (-DINSTA360_BUILD_BENCHMARKS=ON), not the driver -->
+  <test_depend>libopencv-dev</test_depend>
+
   <export>
     <build_type>ament_cmake</build_type>
   </export>

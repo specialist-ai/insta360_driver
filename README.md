@@ -115,6 +115,33 @@ scale 0.2503, rotation ≤0.04°). Train on recordings downscaled with
   full-range color shift through hardware decoders:
   `-p "<base>.ffmpeg.decoders.h264:=h264"` on the subscribing node.
 
+## Measured latency with ROS in the loop (720x720@30, glass->ArUco detect)
+
+Full end-to-end (monitor pixel -> camera -> driver -> ROS -> consumer ->
+marker detected), ArUco marker method:
+
+| Consumer | glass->detect median | ROS-only (stamp->recv) |
+|---|---|---|
+| Zero-copy composed (same process) | 153.5 ms | 2.26 ms |
+| C++ separate process (DDS)        | 152.8 ms | 2.99 ms |
+| Python rclpy (separate process)   | 154.5 ms | 3.57 ms |
+
+All within noise of the camera's ~150 ms internal pipeline. ROS transport adds
+2-3.5 ms (zero-copy < DDS < Python, as expected), so `stamp->recv` is dominated
+by the ~1.7 ms decode+BGR convert. Pick the consumer by ergonomics, not latency.
+
+Test tools live in `test/` and are **dev-only, off by default** — a normal
+build ships just the driver (`insta360_reader` + `camera_node`), with no
+OpenCV dependency. Opt in to the benchmarks explicitly:
+
+```bash
+colcon build --packages-select insta360_camera \
+  --cmake-args -DINSTA360_BUILD_BENCHMARKS=ON
+```
+
+The tools: `aruco_latency_test` (full C++ glass->detect loop), `latency_probe`
+(stamp->recv only), and `test/run_latency_comparison.sh` (all three variants).
+
 Operational note: the camera needs ~60-90 s of idle after a clean session
 close before it will accept a new session — budget settle time when
 restarting the node.
