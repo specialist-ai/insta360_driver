@@ -4,8 +4,7 @@
 
 Low-latency Insta360 X3 rear-lens fisheye reader + ROS 2 publisher.
 
-Raw (unstitched) single-lens fisheye preview over USB at ~155 ms
-glass-to-glass (720×720@30).
+Raw (unstitched) preview over USB at ~155 ms glass-to-glass (720×720@30).
 
 ## What it does
 
@@ -140,7 +139,7 @@ scale 0.2503, rotation ≤0.04°). Train on recordings downscaled with
 ## Measured latency with ROS in the loop (720x720@30, glass->ArUco detect)
 
 Full end-to-end (monitor pixel -> camera -> driver -> ROS -> consumer ->
-marker detected), ArUco marker method:
+marker detected):
 
 | Consumer | glass->detect median | ROS-only (stamp->recv) |
 |---|---|---|
@@ -152,6 +151,14 @@ All within noise of the camera's ~150 ms internal pipeline. ROS transport adds
 2-3.5 ms (zero-copy < DDS < Python, as expected), so `stamp->recv` is dominated
 by the ~1.7 ms decode+BGR convert. Pick the consumer by ergonomics, not latency.
 
+**Stability (8-hour two-camera stress).** Both cameras streamed concurrently for
+8 h (`aruco_latency_test` with `duration:=28800` on both `image_raw` topics):
+**863k frames each, zero dropped / stalled / out-of-order frames, flat memory
+(RSS 63-72 MB), no errors.** The tail stayed flat the whole run — median 158 ms,
+p99 176 ms, worst single frame 204 ms. These figures anchor latency to frame
+arrival (the consumer table above additionally counts detector compute), so the
+tail reflects the camera+driver+transport, not the test's own scheduling.
+
 Test tools live in `test/` and are **dev-only, off by default** — a normal
 build ships just the driver (`insta360_reader` + `camera_node`), with no
 OpenCV dependency. Opt in to the benchmarks explicitly:
@@ -161,8 +168,10 @@ colcon build --packages-select insta360_camera \
   --cmake-args -DINSTA360_BUILD_BENCHMARKS=ON
 ```
 
-The tools: `aruco_latency_test` (full C++ glass->detect loop), `latency_probe`
-(stamp->recv only), and `test/run_latency_comparison.sh` (all three variants).
+The tools: `aruco_latency_test` (glass->detect loop — prints a one-line bench
+summary by default, or set `duration` and a `topics` list for a multi-camera
+integrity + latency stress test), `latency_probe` (stamp->recv only), and
+`test/run_latency_comparison.sh` (all three consumer variants).
 
 Operational note: the camera needs ~60-90 s of idle after a clean session
 close before it will accept a new session — budget settle time when
