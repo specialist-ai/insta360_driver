@@ -1,6 +1,6 @@
 # insta360_camera
 
-[![CI](https://github.com/qiayuanl/insta360_camera/actions/workflows/ci.yml/badge.svg)](https://github.com/qiayuanl/insta360_camera/actions/workflows/ci.yml)
+[![CI](https://github.com/specialist-ai/insta360_driver/actions/workflows/ci.yml/badge.svg)](https://github.com/specialist-ai/insta360_driver/actions/workflows/ci.yml)
 
 Low-latency Insta360 X3 rear-lens fisheye reader + ROS 2 publisher.
 
@@ -120,6 +120,52 @@ ros2 run insta360_camera camera_node --ros-args \
 `insta360::Reader` (`include/insta360_camera/reader.h` + `src/reader.cpp`
 + `sps_patch.h`) has no ROS dependencies: `start(options, callback)` delivers
 YUV420 frames with arrival timestamps; destructor closes the session cleanly.
+
+`ament` is detected rather than required, so a plain `cmake -S . -B build`
+outside a ROS workspace builds the reader alone. Pass
+`-DINSTA360_BUILD_ROS=ON` to force the node in, or `OFF` to leave it out of a
+colcon build.
+
+## Python
+
+```bash
+uv sync --dev                    # the extension and the package
+uv run pytest python/tests -q    # no camera needed
+```
+
+```python
+import insta360_driver as insta360
+
+with insta360.Reader() as reader:
+    reader.start(mode=720, pixel_format='rgb8')
+    frame = reader.read(timeout_ms=200)
+    print(frame.image.shape, frame.arrival_mono)
+```
+
+`mode` is 720, 1280 or 1920 and `pixel_format` is `bgr8`, `rgb8` or `mono8`,
+the same choices the node takes. `frame.image` is a numpy array, HxWx3 or HxW
+for `mono8`.
+
+**The binding pulls where the C++ API pushes.** A Python callback would run on
+the SDK's stream thread and take the GIL inside the decode path, which is the
+path this driver exists to keep short. So the C++ callback converts each frame
+into a one-frame slot without touching Python, and `read()` copies out of it.
+A consumer that falls behind gets the newest frame, never a backlog.
+
+`read(timeout_ms)` waits for a frame it has not returned before and raises
+`TimeoutError` if none arrives, which paces a caller to the camera rather than
+to itself. `latest()` returns the newest frame without waiting, or `None`
+before the first one.
+
+`arrival_mono` is the timestamp to use. It is `CLOCK_MONOTONIC` seconds at
+packet arrival, before host-side decode; `decoded_mono` is when the decode
+finished. Neither includes the camera's own ~120 ms internal pipeline.
+
+The wheel carries `libinsta360_reader.so` and `libCameraSDK.so` beside the
+extension module and finds them through `$ORIGIN`. **Do not publish it.** The
+CameraSDK licence permits shipping the SDK as part of an application, not on a
+stand-alone basis, and every public Insta360 integration leaves it out and
+tells users to apply for their own.
 
 ## Training-data compatibility
 

@@ -4,13 +4,22 @@ project(insta360_camera)
 set(CMAKE_CXX_STANDARD 17)
 add_compile_options(-Wall -O2)
 
-find_package(ament_cmake REQUIRED)
-find_package(rclcpp REQUIRED)
-find_package(rclcpp_components REQUIRED)
-find_package(sensor_msgs REQUIRED)
-find_package(ffmpeg_image_transport_msgs REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(AV REQUIRED libavcodec libavutil libswscale)
+
+# A colcon workspace has ament; a wheel build does not. Detect it rather than
+# require it, so the reader and its Python bindings build with no ROS present.
+find_package(ament_cmake QUIET)
+option(INSTA360_BUILD_ROS "Build the ROS 2 node and package" ${ament_cmake_FOUND})
+option(INSTA360_BUILD_PYTHON "Build the Python extension module" OFF)
+
+if(INSTA360_BUILD_ROS)
+  find_package(ament_cmake REQUIRED)
+  find_package(rclcpp REQUIRED)
+  find_package(rclcpp_components REQUIRED)
+  find_package(sensor_msgs REQUIRED)
+  find_package(ffmpeg_image_transport_msgs REQUIRED)
+endif()
 
 set(SDK_DIR ${CMAKE_CURRENT_SOURCE_DIR}/sdk)
 
@@ -25,6 +34,24 @@ target_include_directories(insta360_reader PRIVATE
   ${SDK_DIR}/include ${AV_INCLUDE_DIRS})
 target_link_libraries(insta360_reader
   ${SDK_DIR}/lib/libCameraSDK.so ${AV_LIBRARIES})
+
+if(INSTA360_BUILD_PYTHON)
+  find_package(Python 3.10 COMPONENTS Interpreter Development.Module REQUIRED)
+  find_package(nanobind CONFIG REQUIRED)
+  nanobind_add_module(_core STABLE_ABI NB_STATIC python/bindings.cpp)
+  target_include_directories(_core PRIVATE ${AV_INCLUDE_DIRS})
+  target_link_libraries(_core PRIVATE insta360_reader ${AV_LIBRARIES})
+  # The wheel carries the reader and the vendored SDK beside the module, so
+  # both have to be found relative to it rather than on the library path.
+  set_target_properties(insta360_reader PROPERTIES INSTALL_RPATH "$ORIGIN")
+  set_target_properties(_core PROPERTIES INSTALL_RPATH "$ORIGIN")
+  install(TARGETS _core insta360_reader LIBRARY DESTINATION insta360_driver)
+  install(FILES ${SDK_DIR}/lib/libCameraSDK.so DESTINATION insta360_driver)
+endif()
+
+if(NOT INSTA360_BUILD_ROS)
+  return()
+endif()
 
 # Composable node (+ standalone executable)
 add_library(camera_component SHARED src/camera_node.cpp)

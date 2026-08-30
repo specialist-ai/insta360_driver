@@ -1,0 +1,45 @@
+[build-system]
+requires = ["scikit-build-core>=1.0", "nanobind>=2.0"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "insta360-driver"
+version = "0.1.0"
+description = "Low-latency Insta360 fisheye reader with Python bindings"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+# numpy is not imported here. The extension returns arrays through the buffer
+# protocol, and nanobind builds them without the numpy C API.
+dependencies = []
+
+[dependency-groups]
+dev = [
+  "numpy>=1.26",
+  "pytest>=8.0",
+  "ruff==0.15.0",
+]
+
+[tool.scikit-build]
+minimum-version = "1.0"
+build-dir = "build/wheel/{wheel_tag}"
+wheel.packages = ["python/insta360_driver"]
+
+[tool.scikit-build.cmake.define]
+INSTA360_BUILD_PYTHON = "ON"
+# The wheel is built outside a ROS workspace, and ament is not there to find.
+INSTA360_BUILD_ROS = "OFF"
+INSTA360_BUILD_BENCHMARKS = "OFF"
+
+[tool.uv]
+python-preference = "only-managed"
+
+[tool.pytest.ini_options]
+testpaths = ["python/tests"]
+
+[tool.ruff]
+line-length = 100
+src = ["python"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "B"]

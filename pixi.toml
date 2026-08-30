@@ -1,0 +1,37 @@
+[workspace]
+name = "insta360_camera"
+version = "0.1.0"
+description = "Low-latency Insta360 fisheye reader"
+channels = ["https://prefix.dev/conda-forge"]
+platforms = ["linux-64", "linux-aarch64"]
+
+[dependencies]
+cxx-compiler = "*"
+cmake = ">=3.16"
+ninja = "*"
+pkg-config = "*"
+ffmpeg = "*"
+
+[activation.env]
+CMAKE_GENERATOR = "Ninja"
+
+[tasks.build]
+cmd = "cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo && cmake --build build"
+description = "Build the ROS-free reader. Without ament on the path this skips the ROS node"
+
+[tasks.build-python]
+cmd = "uv sync --dev"
+description = "Build the Python extension and install the package into .venv"
+
+[tasks.test-python]
+cmd = "uv run pytest python/tests -q"
+depends-on = ["build-python"]
+description = "Run the Python tests. No camera needed"
+
+[tasks.lint]
+cmd = "uv run ruff check python"
+description = "Lint the Python package"
+
+[tasks.clean]
+cmd = "rm -rf build"
+description = "Wipe the CMake build directory"

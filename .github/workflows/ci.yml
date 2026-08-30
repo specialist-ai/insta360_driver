@@ -13,6 +13,31 @@ jobs:
       - uses: actions/setup-python@v5
       - uses: pre-commit/action@v3.0.1
 
+  python:
+    name: Python bindings
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake ninja-build g++ pkg-config \
+            libavcodec-dev libavutil-dev libswscale-dev
+      - name: Build the extension and install the package
+        # ament is not on this runner, so INSTA360_BUILD_ROS defaults off and
+        # only the reader and the bindings are built.
+        run: uv sync --dev
+      - run: uv run ruff check python
+      # No camera on a runner: the test that needs one skips itself.
+      - run: uv run pytest python/tests -q
+      - name: The wheel must carry the reader and the SDK beside the module
+        run: |
+          uv build --wheel -o dist .
+          unzip -l dist/*.whl | grep -q 'insta360_driver/libinsta360_reader.so'
+          unzip -l dist/*.whl | grep -q 'insta360_driver/libCameraSDK.so'
+
   industrial_ci:
     name: ${{ matrix.env.ROS_DISTRO }}
     runs-on: ubuntu-latest
