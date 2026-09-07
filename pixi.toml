@@ -28,6 +28,11 @@ cmd = "uv run pytest python/tests -q"
 depends-on = ["build-python"]
 description = "Run the Python tests. No camera needed"
 
+[tasks.profile-latency]
+cmd = "uv run --group bench python -m insta360_driver.latency"
+depends-on = ["build-python"]
+description = "Glass-to-visible latency over the bindings. Needs the camera pointed at a monitor"
+
 [tasks.lint]
 cmd = "uv run ruff check python"
 description = "Lint the Python package"

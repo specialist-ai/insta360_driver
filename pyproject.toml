@@ -19,6 +19,10 @@ dev = [
   "pytest>=8.0",
   "ruff==0.15.0",
 ]
+bench = [
+  "numpy>=1.26",
+  "opencv-contrib-python>=4.10",
+]
 
 [tool.scikit-build]
 minimum-version = "1.0"
