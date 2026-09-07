@@ -19,6 +19,13 @@ dev = [
   "pytest>=8.0",
   "ruff==0.15.0",
 ]
+# What `insta360_driver.latency` needs to profile the camera, kept out of `dev` so
+# a normal install and CI stay light. ArUco lives in opencv's contrib modules, so
+# opencv-python alone is not enough.
+bench = [
+  "numpy>=1.26",
+  "opencv-contrib-python>=4.10",
+]
 
 [tool.scikit-build]
 minimum-version = "1.0"

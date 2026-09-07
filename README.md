@@ -213,3 +213,83 @@ The tools: `aruco_latency_test` (full C++ glass->detect loop), `latency_probe`
 Operational note: the camera needs ~60-90 s of idle after a clean session
 close before it will accept a new session — budget settle time when
 restarting the node.
+
+## Profiling latency with no ROS at all
+
+`insta360_driver.latency` is the same ArUco method over the bindings instead of
+a ROS topic, and it measures the camera the way a policy consumes it rather than
+the way a `read()` loop does: a thread pulling frames, a per-frame reduction, one
+newest frame kept and the rest dropped, and a shutter stamp earlier than any
+stamp the host can take. It is a module rather than a script in `test/` so a
+deployment can import it.
+
+Add the `bench` group (OpenCV for the markers, numpy for the reduction) and point
+the camera at a monitor:
+
+```bash
+uv run --group bench python -m insta360_driver.latency
+uv run --group bench python -m insta360_driver.latency --mode 1280 --size 256
+uv run --group bench python -m insta360_driver.latency --size 0   # no reduction
+```
+
+It splits the wait into the part the host cannot see and the part it adds:
+
+| | what it covers |
+|---|---|
+| `glass -> visible` | the whole wait, screen to `latest()` |
+| `glass -> arrival` | the in-camera pipeline, up to the driver's stamp |
+| `arrival -> visible` | decode + reduce + thread handoff + poll |
+
+The headline is the last line. A consumer cannot observe the camera's own
+pipeline, so it reports a shutter of `arrival - sensor_delay` and ages everything
+downstream against that; here the true shutter is known, which makes the gap
+between the two a direct check on whatever `--sensor-delay` claims.
+
+Two biases inflate the absolutes — the monitor's own latency, and **half the
+flash period**, because a frame catches a marker already up (~16 ms at the 33 ms
+default). Both are in the C++ numbers too, and neither touches a difference
+between runs.
+
+### Measured (720×720@30, deepcell, 2026-09-07)
+
+`python -m insta360_driver.latency`, so `ThreadedSource` with the 240 px
+reduction and `--sensor-delay 0.120`. n=40 after warm-up, milliseconds:
+
+| | median | mean | min | max | p95 |
+|---|---|---|---|---|---|
+| `glass -> visible` | **157.2** | 153.5 | 121.4 | 174.0 | 168.1 |
+| `glass -> arrival` | 147.8 | 146.1 | 115.4 | 162.8 | 162.3 |
+| `arrival -> visible` | **6.7** | 7.5 | 5.6 | 12.2 | 11.7 |
+
+Two things to take from it.
+
+**The host adds ~7 ms and the camera is the other 148.** Decode, the block mean,
+the thread handoff and the poll together are `arrival -> visible`, and they are
+single digits. Anything you do about latency happens in the camera or not at all.
+
+**It corroborates the ~120 ms in-camera pipeline.** `glass -> arrival` measures
+147.8 ms; subtract the half-period bias (16.5 ms) and a typical LCD's 5-15 ms and
+what is left is ~120-127 ms, against the 120 ms `--sensor-delay` claimed. The
+reported shutter landed +27.8 ms from the marker, which is those two biases and
+close to nothing else. `glass -> visible` at 157 ms also lands on the 155 ms the
+ROS path measures, over an entirely different transport.
+
+### Timing your own camera object
+
+`measure` takes anything wearing `start`/`latest`/`trouble`/`close`, where
+`latest()` returns `(frame, shutter)` or `None`. Hand it the object your
+deployment actually reads and the run times the real path — the real thread, the
+real reduction, the real delay constant — rather than a reconstruction of it that
+can drift:
+
+```python
+from insta360_driver.latency import Flash, run
+
+run(my_deployment_camera, Flash(), sensor_delay=0.120)
+```
+
+`ThreadedSource` is the built-in implementation of that shape, and
+`reduce_frame(image, size)` is the block mean plus disc blank a fisheye policy is
+trained on — integer and round-half-up, so it is reproducible across machines in
+a way a float resize is not. Both are plain numpy; this repo depends on no
+deployment, in either direction.
