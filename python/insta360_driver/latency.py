@@ -47,7 +47,17 @@ from typing import Protocol
 
 import numpy as np
 
-__all__ = ["Flash", "FrameSource", "Sample", "ThreadedSource", "measure", "reduce_frame", "report"]
+__all__ = [
+    "Flash",
+    "FrameSource",
+    "Sample",
+    "ThreadedSource",
+    "histogram",
+    "measure",
+    "print_histogram",
+    "reduce_frame",
+    "report",
+]
 
 MARKER_DICT_NAME = "DICT_4X4_250"
 """250 ids is a long cycle: at 30 fps a stale detection cannot alias onto the id
@@ -358,8 +368,50 @@ def measure(source: FrameSource, flash: Flash, sensor_delay: float) -> list[Samp
     return samples
 
 
-def report(samples: list[Sample], warmup: int, period: float, sensor_delay: float) -> None:
-    """Print the three stages and what they say about ``sensor_delay``."""
+def histogram(values: list[float], bin_ms: float = 10.0) -> list[tuple[float, int]]:
+    """Counts per fixed-width bin, from the bin holding the smallest sample to the
+    one holding the largest.
+
+    Args:
+        values: seconds, as a :class:`Sample` field carries them.
+        bin_ms: bin width in milliseconds. Bins start at 0, so a 10 ms bin runs
+            150-160 and not 157-167: two runs bin onto the same edges and can be
+            read side by side.
+
+    Returns:
+        ``(left edge in ms, count)`` per bin, contiguous and in order. Empty bins
+        inside the range are kept -- a gap between two clusters is the thing a
+        distribution is being read for. Empty input gives an empty list.
+    """
+    if len(values) == 0:
+        return []
+    index = np.floor(np.asarray(values, dtype=float) * 1e3 / bin_ms).astype(int)
+    counts = np.bincount(index - index.min())
+    return [(float((index.min() + i) * bin_ms), int(count)) for i, count in enumerate(counts)]
+
+
+def print_histogram(name: str, values: list[float], bin_ms: float = 10.0, width: int = 40) -> None:
+    """Print one bar per bin, scaled so the fullest bin is ``width`` characters.
+
+    A median hides whether the wait is one tight cluster or a fast path with a
+    long tail hanging off it, and those are different problems; this is the shape
+    a summary row flattens.
+    """
+    bins = histogram(values, bin_ms)
+    if not bins:
+        return
+    peak = max(count for _, count in bins)
+    print(f"\n{name}, {bin_ms:.0f} ms bins (n={sum(count for _, count in bins)})")
+    for left, count in bins:
+        bar = "#" * round(width * count / peak)
+        print(f"  {left:6.0f}-{left + bin_ms:<6.0f}{count:4d}  {bar}".rstrip())
+
+
+def report(
+    samples: list[Sample], warmup: int, period: float, sensor_delay: float, bin_ms: float = 10.0
+) -> None:
+    """Print the three stages, the distribution of the whole wait, and what they
+    say about ``sensor_delay``."""
     warm = samples[warmup:]
     if len(warm) < 4:
         print(f"too few samples to report ({len(warm)} after the {warmup} warm-up)")
@@ -378,6 +430,8 @@ def report(samples: list[Sample], warmup: int, period: float, sensor_delay: floa
     row("glass -> visible", [s.glass_to_visible for s in warm])
     row("glass -> arrival", [s.glass_to_arrival for s in warm])
     row("arrival -> visible", [s.arrival_to_visible for s in warm])
+
+    print_histogram("glass -> visible", [s.glass_to_visible for s in warm], bin_ms)
 
     delay = float(np.median([s.glass_to_arrival for s in warm])) * 1e3
     error = float(np.median([s.shutter_error for s in warm])) * 1e3

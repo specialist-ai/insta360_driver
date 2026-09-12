@@ -8,7 +8,7 @@ with numpy alone, because `dev` carries no OpenCV and only the flashing half of
 import numpy as np
 import pytest
 
-from insta360_driver.latency import Flash, Sample, reduce_frame, report
+from insta360_driver.latency import Flash, Sample, histogram, print_histogram, reduce_frame, report
 
 
 def test_a_frame_reduces_to_the_size_asked_for():
@@ -78,3 +78,44 @@ def test_the_flash_defaults_hold_a_marker_for_about_a_frame():
     flash = Flash()
     assert flash.period == pytest.approx(1 / 30, abs=0.002)
     assert flash.marker_px + 2 * flash.border_px <= 720
+
+
+def test_the_bins_are_ten_milliseconds_wide_and_land_on_round_edges():
+    # Edges start at 0 rather than at the smallest sample, so two runs bin the
+    # same way and can be read against each other.
+    assert histogram([0.152, 0.157, 0.163]) == [(150.0, 2), (160.0, 1)]
+
+
+def test_an_empty_bin_between_two_clusters_is_kept():
+    # The gap is the finding; dropping the empty bin would hide it.
+    assert histogram([0.151, 0.181]) == [(150.0, 1), (160.0, 0), (170.0, 0), (180.0, 1)]
+
+
+def test_a_negative_sample_bins_below_zero():
+    # shutter_error is signed, and a stamp ahead of the marker must not fold onto
+    # the 0-10 bin.
+    assert histogram([-0.004, 0.002]) == [(-10.0, 1), (0.0, 1)]
+
+
+def test_the_bin_width_is_settable():
+    assert histogram([0.151, 0.157], bin_ms=5.0) == [(150.0, 1), (155.0, 1)]
+
+
+def test_no_samples_gives_no_bins():
+    assert histogram([]) == []
+    print_histogram("empty", [])
+
+
+def test_the_histogram_prints_a_bar_per_bin(capsys):
+    print_histogram("glass -> visible", [0.152, 0.157, 0.163], width=10)
+    printed = capsys.readouterr().out
+    assert "glass -> visible, 10 ms bins (n=3)" in printed
+    assert "150-160      2  ##########" in printed
+    assert "160-170      1  #####" in printed
+
+
+def test_reporting_shows_the_distribution_of_the_whole_wait(capsys):
+    report([Sample(0.15, 0.12, 0.03, 0.001)] * 8, warmup=2, period=0.033, sensor_delay=0.12)
+    printed = capsys.readouterr().out
+    assert "glass -> visible, 10 ms bins (n=6)" in printed
+    assert "150-160      6" in printed
